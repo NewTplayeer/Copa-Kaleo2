@@ -13,7 +13,6 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
-        // Corrigido: Adicionado o databaseURL exigido pelo Firebase
         const firebaseConfig = {
             apiKey: "AIzaSyA5EigXpyiczdV4k6BSNSxrxtxyYT_FjaA",
             authDomain: "copakaleo.firebaseapp.com",
@@ -32,23 +31,23 @@
         // Escuta mudanças no banco para atualizar o vídeo em tempo real
         onValue(videoRef, (snapshot) => {
             let dbValue = snapshot.val();
-            console.log("Firebase retornou o valor:", dbValue); // Log para ajudar a debugar no F12
+            console.log("Firebase retornou o valor:", dbValue); 
             
             if (dbValue) {
                 dbValue = dbValue.trim();
 
-                // Se o valor tiver mais de 11 caracteres (for um link sujo), tentamos limpá-lo
-                if (dbValue.length !== 11) {
-                    const extracted = extractVideoID(dbValue);
-                    if (extracted) dbValue = extracted;
-                }
+                // Separa o ID do vídeo dos parâmetros de tempo (se existirem)
+                const baseId = dbValue.split('?')[0];
 
-                // Verifica se é um ID válido do YouTube (sempre 11 caracteres)
-                if (dbValue && dbValue.length === 11) {
+                // Verifica se a base é um ID válido do YouTube (sempre 11 caracteres)
+                if (baseId && baseId.length === 11) {
                     const iframe = document.getElementById('yt-iframe');
-                    const newSrc = `https://www.youtube-nocookie.com/embed/${dbValue}?autoplay=1&mute=1`;
                     
-                    // Só atualiza o iframe se a fonte for diferente da atual (evita piscar o ecrã em loop)
+                    // Adiciona autoplay e mute corretamente dependendo se já existem outros parâmetros
+                    const separator = dbValue.includes('?') ? '&' : '?';
+                    const newSrc = `https://www.youtube-nocookie.com/embed/${dbValue}${separator}autoplay=1&mute=1`;
+                    
+                    // Só atualiza o iframe se a fonte for diferente da atual
                     if (iframe && iframe.src !== newSrc) {
                         console.log("A atualizar iframe para:", newSrc);
                         iframe.src = newSrc;
@@ -63,10 +62,10 @@
         window.updateVideo = function () {
             const url = document.getElementById('yt-link').value.trim();
             console.log("Admin enviou o link:", url);
-            const videoId = extractVideoID(url);
+            const videoData = extractVideoID(url);
 
-            if (videoId) {
-                set(videoRef, videoId)
+            if (videoData) {
+                set(videoRef, videoData)
                     .then(() => {
                         document.getElementById('error-msg').classList.add('hidden');
                         document.getElementById('yt-link').value = '';
@@ -81,29 +80,39 @@
             }
         };
 
-        // Função super robusta para extrair o ID de qualquer formato de link do YT
+        // Função super robusta para extrair o ID e o Tempo Inicial (se houver) de qualquer formato
         function extractVideoID(url) {
             if (!url) return null;
+            let id = null;
+            let timeParam = "";
+
             try {
-                if (url.includes('http')) {
-                    const urlObj = new URL(url);
-                    if (urlObj.hostname.includes('youtube.com')) {
-                        if (urlObj.pathname === '/watch') return urlObj.searchParams.get('v');
-                        if (urlObj.pathname.startsWith('/embed/')) return urlObj.pathname.split('/')[2];
-                        if (urlObj.pathname.startsWith('/live/')) return urlObj.pathname.split('/')[2];
-                        if (urlObj.pathname.startsWith('/shorts/')) return urlObj.pathname.split('/')[2];
-                    }
-                    if (urlObj.hostname === 'youtu.be') {
-                        return urlObj.pathname.substring(1);
-                    }
+                // Tenta extrair o parâmetro de tempo (?t= ou &t=)
+                let urlObj;
+                if (!url.startsWith('http')) {
+                    urlObj = new URL('https://' + url);
+                } else {
+                    urlObj = new URL(url);
+                }
+
+                if (urlObj.searchParams.has('t')) {
+                    timeParam = "?start=" + parseInt(urlObj.searchParams.get('t'));
+                } else if (urlObj.searchParams.has('start')) {
+                    timeParam = "?start=" + parseInt(urlObj.searchParams.get('start'));
                 }
             } catch (e) {
-                console.warn("Análise de URL falhou, a usar regex...");
+                console.warn("Sem parâmetros de tempo adicionais detetados.");
             }
 
+            // Regex padrão para extrair apenas o ID de 11 caracteres do vídeo
             const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|live\/|watch\?v=|\&v=)([^#\&\?]*).*/;
             const match = url.match(regExp);
-            return (match && match[2].length === 11) ? match[2] : null;
+            id = (match && match[2].length === 11) ? match[2] : null;
+
+            if (id) {
+                return id + timeParam; // Guarda na base de dados o ID e o tempo (Ex: y8e9RoHuEHY?start=31814)
+            }
+            return null;
         }
     </script>
 
@@ -116,7 +125,7 @@
         .sponsor-track {
             display: flex;
             flex-direction: column;
-            animation: scrollVertical 25s linear infinite;
+            animation: scrollVertical 30s linear infinite;
         }
 
         .sponsor-track:hover { animation-play-state: paused; }
@@ -158,9 +167,8 @@
 
         <section class="flex-1 flex flex-col gap-5">
             <div class="relative w-full pt-[56.25%] bg-black rounded-2xl overflow-hidden shadow-2xl border border-gray-800 ring-1 ring-white/10 group">
-                <!-- Por padrão, começa a tentar carregar este vídeo enquanto o Firebase não responde -->
+                <!-- O atributo SRC foi removido. O vídeo agora só carrega através da base de dados Firebase -->
                 <iframe id="yt-iframe" class="absolute top-0 left-0 w-full h-full"
-                    src="https://youtu.be/8UVNT4wvIGY?si=GtBX8xKNOuINP90k"
                     title="Transmissão Copa Kaleo" 
                     frameborder="0" 
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
@@ -184,7 +192,7 @@
                 <h2 class="text-sm font-bold text-gray-300 uppercase tracking-widest">Patrocinadores</h2>
             </div>
             <div class="flex-1 relative bg-gray-950/50 fade-edges overflow-hidden">
-                <div class="sponsor-track absolute w-full gap-8 py-8" id="sponsor-track"></div>
+                <div class="sponsor-track absolute w-full top-0" id="sponsor-track"></div>
             </div>
         </aside>
     </main>
@@ -263,20 +271,33 @@
             }, 300);
         }
 
-        // PATROCINADORES - Alterados para um gerador de placeholders que está online e não falha
+        // PATROCINADORES - Rolagem Infinita Perfeita
         const sponsors = [
             { name: "Marca 1", logo: "https://placehold.co/300x120/1f2937/4ade80?text=PATROCINADOR+1" },
             { name: "Marca 2", logo: "https://placehold.co/300x120/1f2937/60a5fa?text=PATROCINADOR+2" },
-            { name: "Marca 3", logo: "https://placehold.co/300x120/1f2937/f472b6?text=PATROCINADOR+3" }
+            { name: "Marca 3", logo: "https://placehold.co/300x120/1f2937/60a5fa?text=PATROCINADOR+3" },
+            { name: "Marca 4", logo: "https://placehold.co/300x120/1f2937/60a5fa?text=PATROCINADOR+4" },
+            { name: "Marca 5", logo: "https://placehold.co/300x120/1f2937/60a5fa?text=PATROCINADOR+5" },
+            { name: "Marca 6", logo: "https://placehold.co/300x120/1f2937/f472b6?text=PATROCINADOR+6" }
         ];
 
         const track = document.getElementById('sponsor-track');
-        const html = sponsors.map(s => `
+        
+        // 1. Criamos o HTML base de um patrocinador
+        const itemHTML = sponsors.map(s => `
             <div class="flex justify-center items-center px-6 transition-transform hover:scale-110">
                 <img src="${s.logo}" alt="${s.name}" class="w-full max-w-[200px] h-auto rounded-xl border border-gray-700 bg-gray-800 p-2">
             </div>
         `).join('');
-        track.innerHTML = html + html;
+        
+        // 2. Multiplicamos a lista para garantir que preenche sempre a tela inteira (evita buracos se houver poucas logos)
+        const blockHTML = itemHTML.repeat(6); 
+
+        // 3. Criamos um bloco que tem o gap (espaço) interno de 8, e um padding bottom de 8 para unir perfeitamente ao próximo bloco
+        const fullBlock = `<div class="flex flex-col gap-8 pb-8">${blockHTML}</div>`;
+
+        // 4. Inserimos exatamente 2 blocos iguais. O CSS translateY(-50%) fará a transição invisível do fim do bloco 1 para o início do bloco 2!
+        track.innerHTML = fullBlock + fullBlock;
     </script>
 </body>
 </html>
