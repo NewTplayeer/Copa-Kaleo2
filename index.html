@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,7 +8,69 @@
 
     <link rel="icon" type="image/png" href="img/Kaleo.jpg">
 
+
+
     <script src="https://cdn.tailwindcss.com"></script>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+        // Sua configuração (já corrigida com os dados que você enviou)
+        const firebaseConfig = {
+            apiKey: "AIzaSyA5EigXpyiczdV4k6BSNSxrxtxyYT_FjaA",
+            authDomain: "copakaleo.firebaseapp.com",
+            projectId: "copakaleo",
+            storageBucket: "copakaleo.firebasestorage.app",
+            messagingSenderId: "966505093433",
+            appId: "1:966505093433:web:c15a187aca147de887f0e8",
+            measurementId: "G-HSF7T692Z7"
+        };
+
+        // Inicializa o Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+        const videoRef = ref(db, 'transmissao/videoAtual');
+
+        // --- SINCRONIZAÇÃO EM TEMPO REAL ---
+        // Quando o link mudar no Firebase, atualiza o iframe para todos os usuários
+        onValue(videoRef, (snapshot) => {
+            const videoId = snapshot.val();
+            if (videoId) {
+                document.getElementById('yt-iframe').src = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1`;
+            }
+        });
+
+        // --- FUNÇÃO PARA O ADMIN ATUALIZAR ---
+        window.updateVideo = function () {
+            const url = document.getElementById('yt-link').value.trim();
+            const videoId = extractVideoID(url);
+
+            if (videoId) {
+                // Salva no Firebase
+                set(videoRef, videoId)
+                    .then(() => {
+                        document.getElementById('error-msg').classList.add('hidden');
+                        document.getElementById('yt-link').value = '';
+                        showMsgModal("Transmissão atualizada para todos!");
+                    })
+                    .catch((error) => {
+                        console.error("Erro ao salvar:", error);
+                        alert("Erro ao salvar no banco de dados.");
+                    });
+            } else {
+                document.getElementById('error-msg').classList.remove('hidden');
+            }
+        };
+
+        // Função auxiliar para pegar o ID do vídeo
+        function extractVideoID(url) {
+            const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|live\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+            const match = url.match(regExp);
+            return (match && match[2].length === 11) ? match[2] : null;
+        }
+    </script>
+
     <style>
         .fade-edges {
             -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 10%, black 90%, transparent 100%);
@@ -25,11 +88,19 @@
         }
 
         @keyframes scrollVertical {
-            0% { transform: translateY(0); }
-            100% { transform: translateY(-50%); }
+            0% {
+                transform: translateY(0);
+            }
+
+            100% {
+                transform: translateY(-50%);
+            }
         }
     </style>
 </head>
+
+
+
 <body class="bg-gray-950 text-white min-h-screen flex flex-col">
 
     <header class="bg-gray-900 border-b border-gray-800 py-6 px-4 shadow-[0_4px_30px_rgba(0,0,0,0.5)] z-10 relative">
@@ -38,23 +109,25 @@
 
             <div class="flex items-center gap-4 hover:scale-105 transition-transform duration-300">
                 <div class="bg-gradient-to-br from-blue-600 to-purple-600 p-1 rounded-xl shadow-lg shadow-blue-500/20">
-                    <img 
-                        src="img/Kaleo.jpg" 
-                        alt="Copa Kaleo" 
-                        class="w-10 h-10 md:w-12 md:h-12 object-cover rounded-lg"
-                        onerror="this.onerror=null;this.src='https://via.placeholder.com/150?text=COPA';"
-                    >
+                    <img src="img/Kaleo.jpg" alt="Copa Kaleo" class="w-10 h-10 md:w-12 md:h-12 object-cover rounded-lg"
+                        onerror="this.onerror=null;this.src='https://via.placeholder.com/150?text=COPA';">
                 </div>
-                
-                <h1 class="text-4xl md:text-5xl font-black uppercase tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 drop-shadow-sm">
+
+                <h1
+                    class="text-4xl md:text-5xl font-black uppercase tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 drop-shadow-sm">
                     Copa Kaleo
                 </h1>
             </div>
 
-            <button onclick="openAdminModal()" class="w-10 h-10 md:w-12 md:h-12 flex items-center justify-center rounded-full hover:bg-gray-800 text-gray-500 hover:text-white transition-colors" title="Acesso Admin">
+            <button onclick="openAdminModal()"
+                class="w-10 h-10 md:w-12 md:h-12 flex items-center justify-center rounded-full hover:bg-gray-800 text-gray-500 hover:text-white transition-colors"
+                title="Acesso Admin">
                 <svg class="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z">
+                    </path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
                 </svg>
             </button>
         </div>
@@ -63,67 +136,80 @@
     <main class="flex-1 w-full max-w-[1500px] mx-auto p-4 md:p-6 lg:p-8 flex flex-col lg:flex-row gap-6 relative z-0">
 
         <section class="flex-1 flex flex-col gap-5">
-            <div class="relative w-full pt-[56.25%] bg-black rounded-2xl overflow-hidden shadow-2xl border border-gray-800 ring-1 ring-white/10 group">
-                <iframe
-                    id="yt-iframe"
-                    class="absolute top-0 left-0 w-full h-full"
-                    src="https://www.youtube.com/embed/live_stream?channel=UC4R8DWoMoI7CAwX8_LjQHig&autoplay=1&mute=1" 
-                    title="Transmissão Copa Kaleo"
-                    frameborder="0"
+            <div
+                class="relative w-full pt-[56.25%] bg-black rounded-2xl overflow-hidden shadow-2xl border border-gray-800 ring-1 ring-white/10 group">
+                <iframe id="yt-iframe" class="absolute top-0 left-0 w-full h-full"
+                    src="https://www.youtube.com/embed/live_stream?channel=UC4R8DWoMoI7CAwX8_LjQHig&autoplay=1&mute=1"
+                    title="Transmissão Copa Kaleo" frameborder="0"
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                     allowfullscreen>
                 </iframe>
             </div>
 
-            <div id="admin-controls" class="hidden bg-gray-900/80 backdrop-blur p-4 rounded-xl border border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.15)] flex-col sm:flex-row gap-4 items-center">
+            <div id="admin-controls"
+                class="hidden bg-gray-900/80 backdrop-blur p-4 rounded-xl border border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.15)] flex-col sm:flex-row gap-4 items-center">
                 <div class="flex-1 w-full">
-                    <label for="yt-link" class="block text-xs font-bold text-blue-400 uppercase tracking-wider mb-1.5 flex items-center gap-2">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                    <label for="yt-link"
+                        class="block text-xs font-bold text-blue-400 uppercase tracking-wider mb-1.5 flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z">
+                            </path>
+                        </svg>
                         Painel Admin: Alterar Transmissão
                     </label>
-                    <input 
-                        type="text" 
-                        id="yt-link" 
-                        placeholder="Cole o link do YouTube aqui..." 
-                        class="w-full bg-gray-950 border border-gray-700 rounded-lg px-4 py-2.5 text-sm text-gray-200 focus:outline-none focus:border-blue-500"
-                    >
+                    <input type="text" id="yt-link" placeholder="Cole o link do YouTube aqui..."
+                        class="w-full bg-gray-950 border border-gray-700 rounded-lg px-4 py-2.5 text-sm text-gray-200 focus:outline-none focus:border-blue-500">
                     <p id="error-msg" class="text-red-400 text-xs mt-1.5 hidden">Link inválido.</p>
                 </div>
-                <button onclick="updateVideo()" class="w-full sm:w-auto bg-blue-600 hover:bg-blue-500 text-white px-6 py-2.5 rounded-lg text-sm font-bold transition-all transform hover:scale-105">
+                <button onclick="updateVideo()"
+                    class="w-full sm:w-auto bg-blue-600 hover:bg-blue-500 text-white px-6 py-2.5 rounded-lg text-sm font-bold transition-all transform hover:scale-105">
                     Atualizar Tela
                 </button>
             </div>
         </section>
 
-        <aside class="w-full lg:w-80 xl:w-96 bg-gray-900 rounded-2xl border border-gray-800 shadow-2xl flex flex-col overflow-hidden h-[450px] lg:h-auto">
+        <aside
+            class="w-full lg:w-80 xl:w-96 bg-gray-900 rounded-2xl border border-gray-800 shadow-2xl flex flex-col overflow-hidden h-[450px] lg:h-auto">
             <div class="p-5 border-b border-gray-800 bg-gray-900 z-10 flex items-center justify-center gap-2">
-                <svg class="w-5 h-5 text-yellow-500" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path></svg>
+                <svg class="w-5 h-5 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
+                    <path
+                        d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z">
+                    </path>
+                </svg>
                 <h2 class="text-center text-sm font-bold text-gray-300 uppercase tracking-widest">Patrocinadores</h2>
             </div>
 
             <div class="flex-1 relative bg-gray-950/50 fade-edges overflow-hidden">
                 <div class="sponsor-track absolute w-full gap-8 py-8" id="sponsor-track">
-                    </div>
+                </div>
             </div>
         </aside>
     </main>
 
-    <div id="admin-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex flex-col items-center justify-center opacity-0 transition-opacity duration-300">
-        <div class="bg-gray-900 border border-gray-800 p-8 rounded-2xl shadow-2xl w-full max-w-sm transform scale-95 transition-transform duration-300" id="admin-modal-content">
+    <div id="admin-modal"
+        class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex flex-col items-center justify-center opacity-0 transition-opacity duration-300">
+        <div class="bg-gray-900 border border-gray-800 p-8 rounded-2xl shadow-2xl w-full max-w-sm transform scale-95 transition-transform duration-300"
+            id="admin-modal-content">
             <h3 class="text-xl font-bold text-white mb-6 text-center">Acesso Admin</h3>
-            <input type="password" id="admin-password" placeholder="Senha" class="w-full bg-gray-950 border border-gray-700 rounded-lg px-4 py-3 text-white mb-2 focus:outline-none focus:border-blue-500">
+            <input type="password" id="admin-password" placeholder="Senha"
+                class="w-full bg-gray-950 border border-gray-700 rounded-lg px-4 py-3 text-white mb-2 focus:outline-none focus:border-blue-500">
             <p id="login-error" class="text-red-400 text-xs mb-4 hidden text-center">Senha incorreta.</p>
             <div class="flex gap-3">
-                <button onclick="closeAdminModal()" class="flex-1 bg-gray-800 hover:bg-gray-700 text-white py-2.5 rounded-lg font-semibold transition-colors">Cancelar</button>
-                <button onclick="verifyAdmin()" class="flex-1 bg-blue-600 hover:bg-blue-500 text-white py-2.5 rounded-lg font-semibold transition-colors">Entrar</button>
+                <button onclick="closeAdminModal()"
+                    class="flex-1 bg-gray-800 hover:bg-gray-700 text-white py-2.5 rounded-lg font-semibold transition-colors">Cancelar</button>
+                <button onclick="verifyAdmin()"
+                    class="flex-1 bg-blue-600 hover:bg-blue-500 text-white py-2.5 rounded-lg font-semibold transition-colors">Entrar</button>
             </div>
         </div>
     </div>
 
-    <div id="msg-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex flex-col items-center justify-center opacity-0 transition-opacity duration-300">
+    <div id="msg-modal"
+        class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex flex-col items-center justify-center opacity-0 transition-opacity duration-300">
         <div class="bg-gray-900 border border-gray-800 p-6 rounded-2xl shadow-2xl w-full max-w-sm text-center">
             <p id="msg-text" class="text-white text-lg font-medium mb-6"></p>
-            <button onclick="closeMsgModal()" class="bg-blue-600 hover:bg-blue-500 text-white px-8 py-2.5 rounded-lg font-semibold">OK</button>
+            <button onclick="closeMsgModal()"
+                class="bg-blue-600 hover:bg-blue-500 text-white px-8 py-2.5 rounded-lg font-semibold">OK</button>
         </div>
     </div>
 
@@ -203,8 +289,9 @@
                 <img src="${s.logo}" alt="${s.name}" class="w-full max-w-[200px] h-auto object-contain rounded-xl border border-gray-700 bg-gray-800 p-2">
             </div>
         `).join('');
-        
+
         track.innerHTML = html + html; // Duplicado para o loop infinito
     </script>
 </body>
+
 </html>
