@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -14,9 +13,11 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
+        // Corrigido: Adicionado o databaseURL exigido pelo Firebase
         const firebaseConfig = {
             apiKey: "AIzaSyA5EigXpyiczdV4k6BSNSxrxtxyYT_FjaA",
             authDomain: "copakaleo.firebaseapp.com",
+            databaseURL: "https://copakaleo-default-rtdb.firebaseio.com",
             projectId: "copakaleo",
             storageBucket: "copakaleo.firebasestorage.app",
             messagingSenderId: "966505093433",
@@ -30,15 +31,38 @@
 
         // Escuta mudanças no banco para atualizar o vídeo em tempo real
         onValue(videoRef, (snapshot) => {
-            const videoId = snapshot.val();
-            if (videoId) {
-                document.getElementById('yt-iframe').src = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1`;
+            let dbValue = snapshot.val();
+            console.log("Firebase retornou o valor:", dbValue); // Log para ajudar a debugar no F12
+            
+            if (dbValue) {
+                dbValue = dbValue.trim();
+
+                // Se o valor tiver mais de 11 caracteres (for um link sujo), tentamos limpá-lo
+                if (dbValue.length !== 11) {
+                    const extracted = extractVideoID(dbValue);
+                    if (extracted) dbValue = extracted;
+                }
+
+                // Verifica se é um ID válido do YouTube (sempre 11 caracteres)
+                if (dbValue && dbValue.length === 11) {
+                    const iframe = document.getElementById('yt-iframe');
+                    const newSrc = `https://www.youtube-nocookie.com/embed/${dbValue}?autoplay=1&mute=1`;
+                    
+                    // Só atualiza o iframe se a fonte for diferente da atual (evita piscar o ecrã em loop)
+                    if (iframe && iframe.src !== newSrc) {
+                        console.log("A atualizar iframe para:", newSrc);
+                        iframe.src = newSrc;
+                    }
+                } else {
+                    console.error("O valor na base de dados não é um ID válido do YouTube:", dbValue);
+                }
             }
         });
 
         // Função Global para o Admin atualizar o Firebase
         window.updateVideo = function () {
             const url = document.getElementById('yt-link').value.trim();
+            console.log("Admin enviou o link:", url);
             const videoId = extractVideoID(url);
 
             if (videoId) {
@@ -46,18 +70,37 @@
                     .then(() => {
                         document.getElementById('error-msg').classList.add('hidden');
                         document.getElementById('yt-link').value = '';
-                        showMsgModal("Transmissão atualizada com sucesso!");
+                        showMsgModal("Transmissão atualizada com sucesso na base de dados!");
                     })
                     .catch((error) => {
                         console.error("Erro Firebase:", error);
-                        alert("Erro ao salvar. Verifique as regras do banco.");
+                        alert("Erro ao guardar. Verifique as regras de permissão da base de dados.");
                     });
             } else {
                 document.getElementById('error-msg').classList.remove('hidden');
             }
         };
 
+        // Função super robusta para extrair o ID de qualquer formato de link do YT
         function extractVideoID(url) {
+            if (!url) return null;
+            try {
+                if (url.includes('http')) {
+                    const urlObj = new URL(url);
+                    if (urlObj.hostname.includes('youtube.com')) {
+                        if (urlObj.pathname === '/watch') return urlObj.searchParams.get('v');
+                        if (urlObj.pathname.startsWith('/embed/')) return urlObj.pathname.split('/')[2];
+                        if (urlObj.pathname.startsWith('/live/')) return urlObj.pathname.split('/')[2];
+                        if (urlObj.pathname.startsWith('/shorts/')) return urlObj.pathname.split('/')[2];
+                    }
+                    if (urlObj.hostname === 'youtu.be') {
+                        return urlObj.pathname.substring(1);
+                    }
+                }
+            } catch (e) {
+                console.warn("Análise de URL falhou, a usar regex...");
+            }
+
             const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|live\/|watch\?v=|\&v=)([^#\&\?]*).*/;
             const match = url.match(regExp);
             return (match && match[2].length === 11) ? match[2] : null;
@@ -94,7 +137,7 @@
             <div class="flex items-center gap-4 hover:scale-105 transition-transform duration-300">
                 <div class="bg-gradient-to-br from-blue-600 to-purple-600 p-1 rounded-xl shadow-lg shadow-blue-500/20">
                     <img src="img/Kaleo.jpg" alt="Copa Kaleo" class="w-10 h-10 md:w-12 md:h-12 object-cover rounded-lg"
-                        onerror="this.onerror=null;this.src='https://via.placeholder.com/150?text=COPA';">
+                        onerror="this.onerror=null;this.src='https://placehold.co/150x150/1f2937/4ade80?text=COPA';">
                 </div>
 
                 <h1 class="text-4xl md:text-5xl font-black uppercase tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 drop-shadow-sm">
@@ -115,9 +158,13 @@
 
         <section class="flex-1 flex flex-col gap-5">
             <div class="relative w-full pt-[56.25%] bg-black rounded-2xl overflow-hidden shadow-2xl border border-gray-800 ring-1 ring-white/10 group">
+                <!-- Por padrão, começa a tentar carregar este vídeo enquanto o Firebase não responde -->
                 <iframe id="yt-iframe" class="absolute top-0 left-0 w-full h-full"
-                    src="https://www.youtube.com/embed/live_stream?channel=UC4R8DWoMoI7CAwX8_LjQHig&autoplay=1&mute=1"
-                    title="Transmissão Copa Kaleo" frameborder="0" allowfullscreen>
+                    src="https://youtu.be/8UVNT4wvIGY?si=GtBX8xKNOuINP90k"
+                    title="Transmissão Copa Kaleo" 
+                    frameborder="0" 
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                    allowfullscreen>
                 </iframe>
             </div>
 
@@ -142,22 +189,24 @@
         </aside>
     </main>
 
+    <!-- Modal Admin -->
     <div id="admin-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex-col items-center justify-center opacity-0 transition-opacity duration-300">
         <div class="bg-gray-900 border border-gray-800 p-8 rounded-2xl shadow-2xl w-full max-w-sm transform scale-95 transition-transform duration-300" id="admin-modal-content">
             <h3 class="text-xl font-bold text-white mb-6 text-center">Acesso Admin</h3>
             <input type="password" id="admin-password" placeholder="Senha" class="w-full bg-gray-950 border border-gray-700 rounded-lg px-4 py-3 text-white mb-2 outline-none focus:border-blue-500">
             <p id="login-error" class="text-red-400 text-xs mb-4 hidden text-center">Senha incorreta.</p>
-            <div class="flex gap-3">
+            <div class="flex gap-3 mt-4">
                 <button onclick="closeAdminModal()" class="flex-1 bg-gray-800 py-2.5 rounded-lg">Cancelar</button>
                 <button onclick="verifyAdmin()" class="flex-1 bg-blue-600 py-2.5 rounded-lg">Entrar</button>
             </div>
         </div>
     </div>
 
-    <div id="msg-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex flex-col items-center justify-center opacity-0 transition-opacity duration-300">
+    <!-- Modal de Mensagem -->
+    <div id="msg-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex-col items-center justify-center opacity-0 transition-opacity duration-300">
         <div class="bg-gray-900 border border-gray-800 p-6 rounded-2xl text-center">
-            <p id="msg-text" class="text-white mb-6"></p>
-            <button onclick="closeMsgModal()" class="bg-blue-600 px-8 py-2.5 rounded-lg">OK</button>
+            <p id="msg-text" class="text-white mb-6 mt-2 font-medium"></p>
+            <button onclick="closeMsgModal()" class="bg-blue-600 px-8 py-2.5 rounded-lg w-full font-bold">OK</button>
         </div>
     </div>
 
@@ -168,20 +217,30 @@
             const m = document.getElementById('admin-modal');
             m.classList.remove('hidden');
             m.classList.add('flex');
-            setTimeout(() => { m.classList.remove('opacity-0'); document.getElementById('admin-modal-content').classList.remove('scale-95'); }, 10);
+            setTimeout(() => { 
+                m.classList.remove('opacity-0'); 
+                document.getElementById('admin-modal-content').classList.remove('scale-95'); 
+            }, 10);
         }
 
         function closeAdminModal() {
             const m = document.getElementById('admin-modal');
             m.classList.add('opacity-0');
-            setTimeout(() => m.classList.add('hidden'), 300);
+            document.getElementById('admin-modal-content').classList.add('scale-95');
+            setTimeout(() => {
+                m.classList.add('hidden');
+                m.classList.remove('flex');
+                document.getElementById('admin-password').value = '';
+                document.getElementById('login-error').classList.add('hidden');
+            }, 300);
         }
 
         function verifyAdmin() {
             if (document.getElementById('admin-password').value === ADMIN_PASSWORD) {
                 closeAdminModal();
-                document.getElementById('admin-controls').classList.remove('hidden');
-                document.getElementById('admin-controls').classList.add('flex');
+                const controls = document.getElementById('admin-controls');
+                controls.classList.remove('hidden');
+                controls.classList.add('flex');
             } else {
                 document.getElementById('login-error').classList.remove('hidden');
             }
@@ -196,15 +255,19 @@
         }
 
         function closeMsgModal() {
-            document.getElementById('msg-modal').classList.add('opacity-0');
-            setTimeout(() => document.getElementById('msg-modal').classList.add('hidden'), 300);
+            const m = document.getElementById('msg-modal');
+            m.classList.add('opacity-0');
+            setTimeout(() => {
+                m.classList.add('hidden');
+                m.classList.remove('flex');
+            }, 300);
         }
 
-        // PATROCINADORES
+        // PATROCINADORES - Alterados para um gerador de placeholders que está online e não falha
         const sponsors = [
-            { name: "Marca 1", logo: "https://via.placeholder.com/300x120/1f2937/4ade80?text=PATROCINADOR+1" },
-            { name: "Marca 2", logo: "https://via.placeholder.com/300x120/1f2937/60a5fa?text=PATROCINADOR+2" },
-            { name: "Marca 3", logo: "https://via.placeholder.com/300x120/1f2937/f472b6?text=PATROCINADOR+3" }
+            { name: "Marca 1", logo: "https://placehold.co/300x120/1f2937/4ade80?text=PATROCINADOR+1" },
+            { name: "Marca 2", logo: "https://placehold.co/300x120/1f2937/60a5fa?text=PATROCINADOR+2" },
+            { name: "Marca 3", logo: "https://placehold.co/300x120/1f2937/f472b6?text=PATROCINADOR+3" }
         ];
 
         const track = document.getElementById('sponsor-track');
